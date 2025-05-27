@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Document Scanner</title>
+<style>
+  /* Reset & basics */
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f5f7fa;
+    margin: 0;
+    padding: 20px;
+    color: #333;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: 700;
+    color: #222;
+  }
+
+  /* Container layout */
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    padding: 20px;
+  }
+
+  /* Upload section */
+  .upload-area {
+    text-align: center;
+    margin-bottom: 25px;
+  }
+
+  input[type="file"] {
+    padding: 10px 12px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1.5px solid #ddd;
+    cursor: pointer;
+    transition: border-color 0.3s;
+  }
+  input[type="file"]:hover {
+    border-color: #007bff;
+  }
+
+  /* Buttons */
+  button {
+    background: #007bff;
+    border: none;
+    color: white;
+    padding: 12px 25px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 10px 10px 0 10px;
+    transition: background 0.3s ease;
+  }
+  button:disabled {
+    background: #a2c0ff;
+    cursor: not-allowed;
+  }
+  button:hover:not(:disabled) {
+    background: #0056b3;
+  }
+
+  /* Images display side-by-side */
+  .images-wrapper {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .image-container {
+    flex: 1 1 45%;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fafafa;
+    box-shadow: inset 0 0 10px #e0e0e0;
+    position: relative;
+    min-height: 300px;
+  }
+  .image-container img {
+    width: 100%;
+    height: auto;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+  }
+  .image-container img.visible {
+    opacity: 1;
+  }
+  .image-label {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    font-weight: 700;
+    color: #555;
+    background: rgba(255,255,255,0.8);
+    padding: 4px 8px;
+    border-radius: 6px;
+    user-select: none;
+    font-size: 14px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+
+  /* Loader */
+  .loader {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #007bff;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    top: calc(50% - 18px);
+    left: calc(50% - 18px);
+    display: none;
+    z-index: 10;
+  }
+  .image-container.loading .loader {
+    display: block;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg);}
+    100% { transform: rotate(360deg);}
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .images-wrapper {
+      flex-direction: column;
+    }
+    .image-container {
+      flex-basis: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Document Scanner</h1>
+
+  <div class="upload-area">
+    <input type="file" id="upload-input" accept="image/*" />
+    <br />
+    <button id="scan-btn" disabled>Scan Document</button>
+    <button id="clear-btn" disabled>Clear</button>
+  </div>
+
+  <div class="images-wrapper">
+    <div class="image-container" id="original-container">
+      <div class="image-label">Original Image</div>
+      <div class="loader"></div>
+      <img id="original-img" alt="Original Document Preview" />
+    </div>
+    <div class="image-container" id="scanned-container">
+      <div class="image-label">Scanned Image</div>
+      <div class="loader"></div>
+      <img id="scanned-img" alt="Scanned Document Preview" />
+    </div>
+  </div>
+</div>
+
+<script>
+  const uploadInput = document.getElementById('upload-input');
+  const scanBtn = document.getElementById('scan-btn');
+  const clearBtn = document.getElementById('clear-btn');
+  const originalImg = document.getElementById('original-img');
+  const scannedImg = document.getElementById('scanned-img');
+  const originalContainer = document.getElementById('original-container');
+  const scannedContainer = document.getElementById('scanned-container');
+
+  let uploadedFile = null;
+
+  // Load the selected image preview
+  uploadInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    uploadedFile = file;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      originalImg.src = reader.result;
+      originalImg.classList.add('visible');
+      scannedImg.src = '';
+      scannedImg.classList.remove('visible');
+      scanBtn.disabled = false;
+      clearBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Scan button click
+  scanBtn.addEventListener('click', async () => {
+    if (!uploadedFile) return;
+
+    // Show loader
+    scannedContainer.classList.add('loading');
+    scanBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('image', uploadedFile);
+
+    try {
+      const response = await fetch('/scan', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to scan image');
+
+      // Read image blob from response
+      const blob = await response.blob();
+      scannedImg.src = URL.createObjectURL(blob);
+      scannedImg.onload = () => {
+        scannedImg.classList.add('visible');
+        scannedContainer.classList.remove('loading');
+      };
+    } catch (error) {
+      alert('Error: ' + error.message);
+      scannedContainer.classList.remove('loading');
+    } finally {
+      scanBtn.disabled = false;
+    }
+  });
+
+  // Clear button click
+  clearBtn.addEventListener('click', () => {
+    uploadInput.value = '';
+    uploadedFile = null;
+    originalImg.src = '';
+    scannedImg.src = '';
+    originalImg.classList.remove('visible');
+    scannedImg.classList.remove('visible');
+    scanBtn.disabled = true;
+    clearBtn.disabled = true;
+    scannedContainer.classList.remove('loading');
+  });
+</script>
+
+</body>
+</html>

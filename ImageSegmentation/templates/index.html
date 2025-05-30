@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lung X-ray Segmentation</title>
+  <style>
+    body {
+      background: linear-gradient(to right, #dbeafe, #eff6ff);
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 2rem;
+    }
+    h1 {
+      color: #1e40af;
+      margin-bottom: 2rem;
+      font-size: 3rem;
+    }
+    .drop-zone {
+      border: 2px dashed #3b82f6;
+      padding: 40px;
+      border-radius: 10px;
+      background: #ffffffaa;
+      cursor: pointer;
+      transition: 0.3s ease;
+      max-width: 500px;
+      margin: 0 auto 1.5rem;
+      position: relative;
+    }
+    .drop-zone:hover {
+      background-color: #ebf4ff;
+    }
+    .drop-zone input {
+      display: none;
+    }
+    .drop-zone p {
+      color: #1e3a8a;
+      font-size: 1.2rem;
+      margin: 0;
+    }
+    .file-name {
+      margin-top: 1rem;
+      font-weight: bold;
+      color: #1d4ed8;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #2563eb;
+      border: none;
+      padding: 12px 24px;
+      color: white;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.3s;
+      font-size: 1rem;
+      margin: 0.5rem;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    .images {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .img-box {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      padding: 1rem;
+      transition: transform 0.3s;
+    }
+    .img-box:hover {
+      transform: scale(1.05);
+    }
+    .img-box img {
+      width: 200px;
+      height: auto;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .modal img {
+      max-width: 80vw;
+      max-height: 80vh;
+      border-radius: 10px;
+      box-shadow: 0 0 20px #000;
+    }
+    .modal .download-btn {
+      margin-top: 1rem;
+      background-color: #10b981;
+      padding: 10px 20px;
+      border: none;
+      color: white;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .modal .download-btn:hover {
+      background-color: #059669;
+    }
+    .modal .close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 30px;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🫁 Lung X-ray U-Net Segmentation</h1>
+
+  <div class="drop-zone" id="dropZone">
+    <p id="dropText">📁 Drag & drop your X-ray image here<br>or click to browse</p>
+    <input type="file" id="imageUpload" accept="image/*" />
+    <div class="file-name" id="fileName"></div>
+  </div>
+
+  <button onclick="uploadImage()">Segment Image</button>
+  <button onclick="clearUI()">Clear</button>
+
+  <div class="images" id="resultImages" style="display:none;">
+    <div class="img-box">
+      <div>Original</div>
+      <img id="original" onclick="openModal(this)">
+    </div>
+    <div class="img-box">
+      <div>Mask</div>
+      <img id="mask" onclick="openModal(this)">
+    </div>
+    <div class="img-box">
+      <div>Masked</div>
+      <img id="masked" onclick="openModal(this)">
+    </div>
+    <div class="img-box">
+      <div>Overlay</div>
+      <img id="overlay" onclick="openModal(this)">
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal" id="modal">
+    <span class="close" onclick="closeModal()">&times;</span>
+    <img id="modalImage">
+    <a id="downloadLink" download>
+      <button class="download-btn">⬇ Download</button>
+    </a>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const input = document.getElementById('imageUpload');
+    const fileName = document.getElementById('fileName');
+    const modal = document.getElementById('modal');
+    const modalImg = document.getElementById('modalImage');
+    const downloadLink = document.getElementById('downloadLink');
+
+    dropZone.addEventListener('click', () => input.click());
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.backgroundColor = '#e0f2fe';
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.backgroundColor = '#ffffffaa';
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      input.files = e.dataTransfer.files;
+      updateFileName();
+      dropZone.style.backgroundColor = '#ffffffaa';
+    });
+    input.addEventListener('change', updateFileName);
+
+    function updateFileName() {
+      if (input.files.length > 0) {
+        fileName.textContent = `Selected: ${input.files[0].name}`;
+      } else {
+        fileName.textContent = '';
+      }
+    }
+
+    async function uploadImage() {
+      if (!input.files[0]) {
+        alert("Please upload an image!");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("image", input.files[0]);
+
+      const response = await fetch('/segment', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      document.getElementById('original').src = data.original;
+      document.getElementById('mask').src = data.mask;
+      document.getElementById('masked').src = data.masked;
+      document.getElementById('overlay').src = data.overlay;
+      document.getElementById('resultImages').style.display = 'flex';
+    }
+
+    function clearUI() {
+      input.value = '';
+      fileName.textContent = '';
+      document.getElementById('resultImages').style.display = 'none';
+      document.querySelectorAll('.img-box img').forEach(img => img.src = '');
+    }
+
+    function openModal(imgElement) {
+      modalImg.src = imgElement.src;
+      downloadLink.href = imgElement.src;
+      modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+      modal.style.display = 'none';
+      modalImg.src = '';
+      downloadLink.href = '';
+    }
+
+    window.addEventListener('click', (e) => {
+      if (e.target == modal) closeModal();
+    });
+  </script>
+</body>
+</html>
